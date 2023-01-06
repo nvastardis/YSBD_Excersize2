@@ -25,6 +25,8 @@ int HT_CreateFile(char *fileName,  int buckets){
     HT_info *ht_info;
     BF_Block *firstBlock;
 
+    remove(fileName);
+
     if(BF_CreateFile(fileName)){
         return -1;
     }
@@ -38,8 +40,7 @@ int HT_CreateFile(char *fileName,  int buckets){
 
     ht_info = (HT_info *) BF_Block_GetData(firstBlock);
     ht_info->bucketDefinitionsBlock = 0;
-    ht_info->fileDescriptor = fileDesc;
-    ht_info->fileName = fileName;
+    strcpy(ht_info->fileName, fileName);
     ht_info->numberOfBuckets = MAX_NUMBER_OF_BUCKETS;
     for(counter = 0; counter < MAX_NUMBER_OF_BUCKETS; counter++){
         if(SetUpNewEmptyBlock(ht_info)){
@@ -73,6 +74,8 @@ HT_info* HT_OpenFile(char *fileName){
         return NULL;
     }
     data = (HT_info*)BF_Block_GetData(block);
+    data->fileDescriptor = fileDesc;
+    BF_Block_SetDirty(block);
     if(BF_UnpinBlock(block)){
         return NULL;
     }
@@ -83,7 +86,10 @@ HT_info* HT_OpenFile(char *fileName){
 
 int HT_CloseFile( HT_info* HT_info ){
     int fileDesc = HT_info->fileDescriptor;
-    char *fileName = HT_info->fileName;
+    int nameLength = strlen(HT_info->fileName);
+    char *fileName;
+    fileName = malloc(sizeof(char) * nameLength + 1);
+    strcpy(fileName, HT_info->fileName);
     if(BF_CloseFile(HT_info->fileDescriptor)){
         return -1;
     }
@@ -147,7 +153,7 @@ int HT_GetAllEntries(HT_info* ht_info, void *value ){
         recordCounter, 
         counter, 
         blocksInFile, 
-        blocksSearched, 
+        recordsSearched, 
         fileFound,
         currentBlockId;
     void *data;
@@ -155,7 +161,7 @@ int HT_GetAllEntries(HT_info* ht_info, void *value ){
     BF_Block *block;
     HT_block_info block_info;
 
-    blocksSearched = 0;
+    recordsSearched = 0;
     fileFound = 0;
     if(BF_GetBlockCounter(ht_info->fileDescriptor, &blocksInFile)){
         return -1;
@@ -175,7 +181,6 @@ int HT_GetAllEntries(HT_info* ht_info, void *value ){
         if(BF_UnpinBlock(block)){
             return -1;
         }
-        blocksSearched++;
         memcpy( &block_info, (data + (RECORDS_PER_BLOCK * sizeof(Record)) + 10), sizeof(HT_block_info));
         records = (Record*) data;
         for(recordCounter = 0; recordCounter < block_info.RecordCount; recordCounter++){
@@ -185,14 +190,14 @@ int HT_GetAllEntries(HT_info* ht_info, void *value ){
                 }
                 BF_Block_Destroy(&block);
                 printRecord(records[recordCounter]);
-                return blocksSearched;
+                return recordsSearched;
             }
         }
         currentBlockId = block_info.PreviousBlockId;
     }while(currentBlockId != -1);
 
     BF_Block_Destroy(&block);
-    return blocksSearched;
+    return recordsSearched;
 
 }
 

@@ -19,13 +19,15 @@
 
 int SetUpNewBlockInSht(SHT_info *Sht_info, SHT_Record record, int previousBlockId);
 int SetUpNewEmptyBlockInSht(SHT_info *Sht_info);
-int hashName(char *value);
+int hashName(char *value, int numberOfBuckets);
 
 int SHT_CreateSecondaryIndex(char *sfileName,  int buckets, char* fileName){
     int fileDesc, counter;
     void *data;
     SHT_info *sht_info;
     BF_Block *firstBlock;
+
+    remove(sfileName);
 
     if(BF_CreateFile(sfileName)){
         return -1;
@@ -40,14 +42,9 @@ int SHT_CreateSecondaryIndex(char *sfileName,  int buckets, char* fileName){
 
     sht_info = (SHT_info *) BF_Block_GetData(firstBlock);
     sht_info->bucketDefinitionsBlock = 0;
-    sht_info->fileDescriptor = fileDesc;
     sht_info->fileName = sfileName;
-    sht_info->numberOfBuckets = MAX_NUMBER_OF_BUCKETS;
-    sht_info->ht_fileName = fileName;
-    for(counter = 0; counter < MAX_NUMBER_OF_BUCKETS; counter++){
-        if(SetUpNewEmptyBlockInSht(sht_info)){
-            return -1;
-        }        
+    sht_info->numberOfBuckets = buckets;
+    for(counter = 0; counter < buckets; counter++){
         sht_info->hashtableMapping[counter] = counter + 1;
     }
 
@@ -65,7 +62,7 @@ int SHT_CreateSecondaryIndex(char *sfileName,  int buckets, char* fileName){
 }
 
 SHT_info* SHT_OpenSecondaryIndex(char *indexName){
-    int fileDesc;
+    int fileDesc, counter;
     SHT_info *data;
     BF_Block *block;
 
@@ -77,6 +74,13 @@ SHT_info* SHT_OpenSecondaryIndex(char *indexName){
         return NULL;
     }
     data = (SHT_info*)BF_Block_GetData(block);
+    data->fileDescriptor = fileDesc;
+    for(counter = 0; counter < data->numberOfBuckets; counter++){
+        if(SetUpNewEmptyBlockInSht(data) == -1){
+            return NULL;
+        }
+    }
+    BF_Block_SetDirty(block);
     if(BF_UnpinBlock(block)){
         return NULL;
     }
@@ -87,7 +91,10 @@ SHT_info* SHT_OpenSecondaryIndex(char *indexName){
 
 int SHT_CloseSecondaryIndex( SHT_info* SHT_info ){
     int fileDesc = SHT_info->fileDescriptor;
-    char *fileName = SHT_info->fileName;
+    int nameLength = strlen(SHT_info->fileName);
+    char *fileName;
+    fileName = malloc(sizeof(char) * nameLength + 1);
+    strcpy(fileName, SHT_info->fileName);
     if(BF_CloseFile(SHT_info->fileDescriptor)){
         return -1;
     }
@@ -109,7 +116,7 @@ int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
     strcpy(currentRecord.name, record.name);
     currentRecord.blockId = block_id;
 
-    hashValue = hashName(currentRecord.name);
+    hashValue = hashName(currentRecord.name, sht_info->numberOfBuckets);
     BF_Block_Init(&block);
     if(BF_GetBlock(sht_info->fileDescriptor, sht_info->hashtableMapping[hashValue], block)){
         return -1;
@@ -173,7 +180,7 @@ int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name)
         return -1;
     }
     
-    hashValue = hashName(name);
+    hashValue = hashName(name, sht_info->numberOfBuckets);
     currentBlockId = sht_info->hashtableMapping[hashValue];
     BF_Block_Init(&block);
     do{
@@ -185,7 +192,7 @@ int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name)
         if(BF_UnpinBlock(block)){
             return -1;
         }
-        memcpy( &sht_block_info, (data + (RECORDS_PER_BLOCK * sizeof(SHT_Record)) + 10), sizeof(SHT_block_info));
+        memcpy( &sht_block_info, (data + (SHT_RECORDS_PER_BLOCK * sizeof(SHT_Record)) + 10), sizeof(SHT_block_info));
         sht_BlockData = (SHT_Record*) data;
         for(recordCounter = 0; recordCounter < sht_block_info.RecordCount; recordCounter++){
             if(strcmp(sht_BlockData[recordCounter].name, name) == 0){
@@ -218,6 +225,7 @@ int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name)
             }
         }
         blocksSearched++;
+        trv = trv->NextNode;
     }
     BF_Block_Destroy(&block);
     FreeBlockList(resultList);
@@ -227,7 +235,7 @@ int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name)
 
 
 
-int SetUpNewEmptyBlockInSht(SHT_info *ht_info){
+int SetUpNewEmptyBlockInSht(SHT_info *sht_info){
     int counter,
         numberOfBlocks;
     void *data;
@@ -235,7 +243,7 @@ int SetUpNewEmptyBlockInSht(SHT_info *ht_info){
     SHT_block_info block_info;
 
     BF_Block_Init(&block);
-    if(BF_AllocateBlock(ht_info->fileDescriptor, block)){
+    if(BF_AllocateBlock(sht_info->fileDescriptor, block)){
         return -1;
     }
     data = BF_Block_GetData(block);
@@ -278,14 +286,14 @@ int SetUpNewBlockInSht(SHT_info *ht_info, SHT_Record record, int previousBlockId
     return 0;
 }
 
-int hashName(char *value){
+int hashName(char *value, int numberOfBuckets){
     int i, sum, limit;
     limit = strlen(value);
     sum = 0;
     for(i = 0; i < limit; i++){
         sum += (int)(value[i]);
     }
-    return sum % MAX_NUMBER_OF_BUCKETS;    
+    return sum % MAX_NUMBER_OF_BUCKETS_ON_SHT;    
 }
 
 

@@ -7,7 +7,7 @@
 
 typedef struct {
     int fileDescriptor;
-    char *fileName;
+    char fileName[15];
     long int numberOfBuckets;
     int bucketDefinitionsBlock;
     int hashtableMapping[MAX_NUMBER_OF_BUCKETS];

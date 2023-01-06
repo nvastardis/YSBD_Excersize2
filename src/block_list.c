@@ -23,6 +23,7 @@ void AddNode(BlockList* blockList, int newBlockId){
     newNode->NextNode = NULL;
 
     if(blockList->Head != NULL){
+        traverser = blockList->Head;
         while(traverser->NextNode != NULL){
             if(traverser->blockId == newBlockId){
                 free(newNode);

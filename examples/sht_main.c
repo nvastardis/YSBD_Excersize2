@@ -42,17 +42,26 @@ int main() {
 
     // Κάνουμε εισαγωγή τυχαίων εγγραφών τόσο στο αρχείο κατακερματισμού τις οποίες προσθέτουμε και στο δευτερεύον ευρετήριο
     printf("Insert Entries\n");
+
+    int vagCounter = 0;
     for (int id = 0; id < RECORDS_NUM; ++id) {
+        int block_id;
         record = randomRecord();
-        int block_id = HT_InsertEntry(info, record);
+        if( (block_id = HT_InsertEntry(info, record)) == -1){
+            printf("Error Inserting Entry on HT %d", block_id);
+        }
         if(SHT_SecondaryInsertEntry(index_info, record, block_id) == -1){
             printf("Error Inserting Entry on SHT %d", block_id);
             return -1;
         }
+        if(strcmp(record.name, "Maria") == 0){
+          vagCounter++;
+        }
     }
+    printf("Maria found %d times\n", vagCounter);
     // Τυπώνουμε όλες τις εγγραφές με όνομα searchName
-    printf("RUN PrintAllEntries for name %s\n",searchName);
-    if(SHT_SecondaryGetAllEntries(info,index_info,searchName) == -1){
+    printf("RUN PrintAllEntries for name %s\n", "Maria");
+    if(SHT_SecondaryGetAllEntries(info,index_info,"Maria") == -1){
       return -1;
     }
 
