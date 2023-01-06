@@ -52,7 +52,9 @@ int main() {
     }
     // Τυπώνουμε όλες τις εγγραφές με όνομα searchName
     printf("RUN PrintAllEntries for name %s\n",searchName);
-    SHT_SecondaryGetAllEntries(info,index_info,searchName);
+    if(SHT_SecondaryGetAllEntries(info,index_info,searchName) == -1){
+      return -1;
+    }
 
     // Κλείνουμε το αρχείο κατακερματισμού και το δευτερεύον ευρετήριο
     SHT_CloseSecondaryIndex(index_info);

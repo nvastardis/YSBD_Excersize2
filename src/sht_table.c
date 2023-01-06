@@ -112,7 +112,6 @@ int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
     hashValue = hashName(currentRecord.name);
     BF_Block_Init(&block);
     if(BF_GetBlock(sht_info->fileDescriptor, sht_info->hashtableMapping[hashValue], block)){
-        BF_PrintError(BF_GetBlock(sht_info->fileDescriptor, sht_info->hashtableMapping[hashValue], block));
         return -1;
     }
 
@@ -160,8 +159,6 @@ int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name)
     SHT_Record *sht_BlockData;
     Record *ht_BlockData;
     BF_Block *block;
-    SHT_block_info sht_block_info;
-    HT_block_info ht_block_info;
     BlockList *resultList;
     BlockListNode *trv;
     
@@ -172,32 +169,30 @@ int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name)
 
     blocksSearched = 0;
     fileFound = 0;
-    if(BF_GetBlockCounter(ht_info->fileDescriptor, &blocksInFile)){
+    if(BF_GetBlockCounter(sht_info->fileDescriptor, &blocksInFile)){
         return -1;
     }
     
     hashValue = hashName(name);
     currentBlockId = sht_info->hashtableMapping[hashValue];
-
+    BF_Block_Init(&block);
     do{
-        if(BF_GetBlock(ht_info->fileDescriptor, currentBlockId, block)){
+        SHT_block_info sht_block_info;
+        if(BF_GetBlock(sht_info->fileDescriptor, currentBlockId, block)){
             return -1;
         }
         data = BF_Block_GetData(block);
         if(BF_UnpinBlock(block)){
             return -1;
         }
-        blocksSearched++;
         memcpy( &sht_block_info, (data + (RECORDS_PER_BLOCK * sizeof(SHT_Record)) + 10), sizeof(SHT_block_info));
         sht_BlockData = (SHT_Record*) data;
         for(recordCounter = 0; recordCounter < sht_block_info.RecordCount; recordCounter++){
-            if(sht_BlockData[recordCounter].name == name){
+            if(strcmp(sht_BlockData[recordCounter].name, name) == 0){
                 AddNode(resultList, sht_BlockData->blockId);
             }
         }
-        if(BF_UnpinBlock(block)){
-            return -1;
-        }
+        blocksSearched++;
         currentBlockId = sht_block_info.PreviousBlockId;
     }while(currentBlockId != -1);
 
@@ -207,6 +202,7 @@ int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name)
     
     trv = resultList->Head;
     while(trv != NULL){
+        HT_block_info ht_block_info;
         if(BF_GetBlock(ht_info->fileDescriptor, trv->blockId, block)){
             return -1;
         }
@@ -217,12 +213,13 @@ int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name)
         memcpy( &ht_block_info, (data + (RECORDS_PER_BLOCK * sizeof(Record)) + 10), sizeof(HT_block_info));
         ht_BlockData = (Record*) data;
         for(recordCounter = 0; recordCounter < ht_block_info.RecordCount; recordCounter++){
-            if(ht_BlockData[recordCounter].name == name){
+            if(strcmp(ht_BlockData[recordCounter].name, name) == 0){
                 printRecord(ht_BlockData[recordCounter]);
             }
         }
         blocksSearched++;
     }
+    BF_Block_Destroy(&block);
     FreeBlockList(resultList);
     return blocksSearched;
 }
@@ -282,8 +279,10 @@ int SetUpNewBlockInSht(SHT_info *ht_info, SHT_Record record, int previousBlockId
 }
 
 int hashName(char *value){
-    int i, sum;
-    for(i = 0; i < strlen(value); i++){
+    int i, sum, limit;
+    limit = strlen(value);
+    sum = 0;
+    for(i = 0; i < limit; i++){
         sum += (int)(value[i]);
     }
     return sum % MAX_NUMBER_OF_BUCKETS;    

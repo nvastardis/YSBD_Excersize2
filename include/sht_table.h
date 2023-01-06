@@ -3,7 +3,7 @@
 #include <record.h>
 #include <ht_table.h>
 
-#define SHT_RECORDS_PER_BLOCK BF_BLOCK_SIZE / sizeof(SHT_Record)
+#define SHT_RECORDS_PER_BLOCK ((BF_BLOCK_SIZE / sizeof(SHT_Record)) - 1)
 
 
 typedef struct {
