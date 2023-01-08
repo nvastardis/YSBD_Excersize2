@@ -95,6 +95,7 @@ int HT_CloseFile( HT_info* HT_info ){
     
     strcpy(fileName, HT_info->FileName);
     free(HT_info->HashtableMapping);
+    free(HT_info);
     
     CALL_OR_DIE(BF_CloseFile(HT_info->FileDescriptor));
     remove(fileName);
