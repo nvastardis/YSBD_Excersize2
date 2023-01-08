@@ -3,7 +3,7 @@
 #include <record.h>
 
 #define MAX_NUMBER_OF_BUCKETS 20
-#define RECORDS_PER_BLOCK BF_BLOCK_SIZE / sizeof(Record)
+#define RECORDS_PER_BLOCK 6
 
 typedef struct {
     int fileDescriptor;

@@ -18,7 +18,7 @@
 int SetUpNewBlock(HT_info *ht_info, Record record, int previousBlockId);
 int SetUpNewEmptyBlock(HT_info *ht_info);
 
-int hash(int value);
+int hash(int value, int mask);
 int HT_CreateFile(char *fileName,  int buckets){
     int fileDesc, counter;
     void *data;
@@ -26,73 +26,68 @@ int HT_CreateFile(char *fileName,  int buckets){
     BF_Block *firstBlock;
 
     remove(fileName);
-
-    if(BF_CreateFile(fileName)){
-        return -1;
-    }
-    if(BF_OpenFile(fileName, &fileDesc)){
-        return -1;
-    }
+    CALL_OR_DIE(BF_CreateFile(fileName));
+    CALL_OR_DIE(BF_OpenFile(fileName, &fileDesc));
     BF_Block_Init(&firstBlock);
-    if(BF_AllocateBlock( fileDesc, firstBlock)){
-        return -1;;
-    }
+    CALL_OR_DIE(BF_AllocateBlock( fileDesc, firstBlock));
 
     ht_info = (HT_info *) BF_Block_GetData(firstBlock);
     ht_info->bucketDefinitionsBlock = 0;
     strcpy(ht_info->fileName, fileName);
-    ht_info->numberOfBuckets = MAX_NUMBER_OF_BUCKETS;
-    for(counter = 0; counter < MAX_NUMBER_OF_BUCKETS; counter++){
-        if(SetUpNewEmptyBlock(ht_info)){
-            return -1;
-        }        
+    ht_info->numberOfBuckets = buckets;
+    ht_info->fileDescriptor = fileDesc;
+    for(counter = 0; counter < buckets; counter++){
         ht_info->hashtableMapping[counter] = counter + 1;
     }
     BF_Block_SetDirty(firstBlock);
-    if(BF_UnpinBlock(firstBlock)){
-        return -1;
-    }
+    CALL_OR_DIE(BF_UnpinBlock(firstBlock));
     
 
     BF_Block_Destroy(&firstBlock);
-    if(BF_CloseFile(fileDesc)){
-        return -1;
-    }
+    CALL_OR_DIE(BF_CloseFile(fileDesc));
     return 0;
 }
 
 HT_info* HT_OpenFile(char *fileName){
-    int fileDesc;
+    int fileDesc, counter;
     HT_info *data;
     BF_Block *block;
-
-    if(BF_OpenFile(fileName, &fileDesc)){
-        return NULL;
+    BF_ErrorCode code;
+    
+    code = BF_OpenFile(fileName, &fileDesc);
+    if (code != BF_OK) {
+      BF_PrintError(code);
+      return NULL;
     }
+
     BF_Block_Init(&block);
-    if(BF_GetBlock(fileDesc, 0, block)){
+    code = BF_GetBlock(fileDesc, 0, block);
+    if(code != BF_OK){
         return NULL;
     }
     data = (HT_info*)BF_Block_GetData(block);
     data->fileDescriptor = fileDesc;
     BF_Block_SetDirty(block);
-    if(BF_UnpinBlock(block)){
+    code = BF_UnpinBlock(block);
+    if(code != BF_OK){
+        BF_PrintError(code);
         return NULL;
     }
     BF_Block_Destroy(&block);
+    for(counter = 0; counter < data->numberOfBuckets; counter++){
+        if(SetUpNewEmptyBlock(data) != 0){
+            return NULL;
+        }
+    }
     return data;
 }
 
 
 int HT_CloseFile( HT_info* HT_info ){
     int fileDesc = HT_info->fileDescriptor;
-    int nameLength = strlen(HT_info->fileName);
-    char *fileName;
-    fileName = malloc(sizeof(char) * nameLength + 1);
+    char fileName[15];
     strcpy(fileName, HT_info->fileName);
-    if(BF_CloseFile(HT_info->fileDescriptor)){
-        return -1;
-    }
+    CALL_OR_DIE(BF_CloseFile(HT_info->fileDescriptor));
     remove(fileName);
     return 0;
 }
@@ -105,44 +100,31 @@ int HT_InsertEntry(HT_info* ht_info, Record record){
     BF_Block *block;
     Record *records;
     HT_block_info block_info;
-    if(BF_GetBlockCounter(ht_info->fileDescriptor, &numberOfBlocks)){
-        return -1;
-    }
 
-    hashValue = hash(record.id);
+    hashValue = hash(record.id, ht_info->numberOfBuckets);
     BF_Block_Init(&block);
-    if(BF_GetBlock(ht_info->fileDescriptor, ht_info->hashtableMapping[hashValue], block)){
-        BF_PrintError(BF_GetBlock(ht_info->fileDescriptor, ht_info->hashtableMapping[hashValue], block));
-        return -1;
-    }
+    CALL_OR_DIE(BF_GetBlock(ht_info->fileDescriptor, ht_info->hashtableMapping[hashValue], block));
 
     data = BF_Block_GetData(block);
-    memcpy(&block_info, (HT_block_info*)(data + (RECORDS_PER_BLOCK * sizeof(Record)) + 10), sizeof(HT_block_info));
+    memcpy( &block_info, (data + (RECORDS_PER_BLOCK * sizeof(Record)) + 10), sizeof(HT_block_info));
 
-    if(block_info.RecordCount ==RECORDS_PER_BLOCK){
-        if(BF_UnpinBlock(block)){
-            return -1;
-        }
+    if(block_info.RecordCount == RECORDS_PER_BLOCK){
+        CALL_OR_DIE(BF_UnpinBlock(block));
         BF_Block_Destroy(&block);
-        if(SetUpNewBlock(ht_info, record, ht_info->hashtableMapping[hashValue]) == -1){
+        if(SetUpNewBlock(ht_info, record, ht_info->hashtableMapping[hashValue]) != 0){
             return -1;
         }
-        if(BF_GetBlockCounter(ht_info->fileDescriptor, &numberOfBlocks)){
-            return -1;
-        }
+        CALL_OR_DIE(BF_GetBlockCounter(ht_info->fileDescriptor, &numberOfBlocks));
 
         ht_info->hashtableMapping[hashValue] = numberOfBlocks - 1;
         return ht_info->hashtableMapping[hashValue];
     }
-
     records = (Record*)data;
     records[block_info.RecordCount] = record;
     BF_Block_SetDirty(block);
-    if(BF_UnpinBlock(block)){
-        return -1;
-    }
+    CALL_OR_DIE(BF_UnpinBlock(block));
     block_info.RecordCount++;
-    memcpy( (HT_block_info*)(data + (RECORDS_PER_BLOCK * sizeof(Record)) + 10), &block_info, sizeof(HT_block_info));
+    memcpy((data + (RECORDS_PER_BLOCK * sizeof(Record)) + 10), &block_info, sizeof(HT_block_info));
     BF_Block_Destroy(&block);
 
     return ht_info->hashtableMapping[hashValue];
@@ -162,47 +144,40 @@ int HT_GetAllEntries(HT_info* ht_info, void *value ){
     HT_block_info block_info;
 
     recordsSearched = 0;
-    fileFound = 0;
-    if(BF_GetBlockCounter(ht_info->fileDescriptor, &blocksInFile)){
-        return -1;
-    }
-    
+    fileFound = 0;    
 
-    hashValue = hash(*(int *)value);
+    CALL_OR_DIE(BF_GetBlockCounter(ht_info->fileDescriptor, &blocksInFile));
+
+    hashValue = hash(*(int *)value, ht_info->numberOfBuckets);
     currentBlockId = ht_info->hashtableMapping[hashValue];
 
     BF_Block_Init(&block);
 
     do{
-        if(BF_GetBlock(ht_info->fileDescriptor, currentBlockId, block)){
-            return -1;
-        }
+        CALL_OR_DIE(BF_GetBlock(ht_info->fileDescriptor, currentBlockId, block));
         data = BF_Block_GetData(block);
-        if(BF_UnpinBlock(block)){
-            return -1;
-        }
         memcpy( &block_info, (data + (RECORDS_PER_BLOCK * sizeof(Record)) + 10), sizeof(HT_block_info));
         records = (Record*) data;
         for(recordCounter = 0; recordCounter < block_info.RecordCount; recordCounter++){
             if(records[recordCounter].id == (*(int *)value)){
-                if(BF_UnpinBlock(block)){
-                    return -1;
-                }
+                CALL_OR_DIE(BF_UnpinBlock(block));
                 BF_Block_Destroy(&block);
                 printRecord(records[recordCounter]);
                 return recordsSearched;
             }
+            recordsSearched++;
         }
+        CALL_OR_DIE(BF_UnpinBlock(block));
         currentBlockId = block_info.PreviousBlockId;
-    }while(currentBlockId != -1);
+    }while(currentBlockId != 0);
 
     BF_Block_Destroy(&block);
-    return recordsSearched;
+    return -1;
 
 }
 
-int hash(int value){
-    return value % MAX_NUMBER_OF_BUCKETS ;
+int hash(int value, int mask){
+    return value % mask;
 }
 
 int SetUpNewEmptyBlock(HT_info *ht_info){
@@ -213,17 +188,14 @@ int SetUpNewEmptyBlock(HT_info *ht_info){
     HT_block_info block_info;
 
     BF_Block_Init(&block);
-    if(BF_AllocateBlock(ht_info->fileDescriptor, block)){
-        return -1;
-    }
+    CALL_OR_DIE(BF_AllocateBlock(ht_info->fileDescriptor, block));
     data = BF_Block_GetData(block);
-    if(BF_UnpinBlock(block)){
-        return -1;
-    }
+
+    CALL_OR_DIE(BF_UnpinBlock(block));
 
     block_info.RecordCount = 0;
     block_info.PreviousBlockId = -1;
-    memcpy( (data + (RECORDS_PER_BLOCK * sizeof(Record)) + 10), &block_info, sizeof(HT_block_info));
+    memcpy((data + (RECORDS_PER_BLOCK * sizeof(Record)) + 10), &block_info, sizeof(HT_block_info));
     BF_Block_Destroy(&block);
     return 0;
 }
@@ -238,20 +210,16 @@ int SetUpNewBlock(HT_info *ht_info, Record record, int previousBlockId){
     HT_block_info block_info;
 
     BF_Block_Init(&block);
-    if(BF_AllocateBlock(ht_info->fileDescriptor, block)){
-        return -1;
-    }
+    CALL_OR_DIE(BF_AllocateBlock(ht_info->fileDescriptor, block));
     data = BF_Block_GetData(block);
     blockData = (Record *) data;
     blockData[0] = record;
     BF_Block_SetDirty(block);
-    if(BF_UnpinBlock(block)){
-        return -1;
-    }
+    CALL_OR_DIE(BF_UnpinBlock(block));
 
     block_info.RecordCount = 1;
     block_info.PreviousBlockId = previousBlockId;
-    memcpy( (data + (RECORDS_PER_BLOCK * sizeof(Record)) + 10), &block_info, sizeof(HT_block_info));
+    memcpy((data + (RECORDS_PER_BLOCK * sizeof(Record)) + 10), &block_info, sizeof(HT_block_info));
     BF_Block_Destroy(&block);
     return 0;
 
