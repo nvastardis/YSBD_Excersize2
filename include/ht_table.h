@@ -6,11 +6,11 @@
 #define RECORDS_PER_BLOCK 6
 
 typedef struct {
-    int fileDescriptor;
-    char fileName[15];
-    long int numberOfBuckets;
-    int bucketDefinitionsBlock;
-    int hashtableMapping[MAX_NUMBER_OF_BUCKETS];
+    char FileName[15];
+    int FileDescriptor;
+    int NumberOfBuckets;
+    int BucketDefinitionsBlock;
+    int *HashtableMapping;
 } HT_info;
 
 typedef struct {

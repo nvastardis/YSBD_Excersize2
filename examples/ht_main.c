@@ -35,7 +35,7 @@ int main() {
   printf("Insert Entries\n");
   for (int id = 0; id < RECORDS_NUM; ++id) {
     record = randomRecord();
-    if(HT_InsertEntry(info, record) != 0){
+    if(HT_InsertEntry(info, record) == -1){
       printf("Error inserting record %d", id);
       return -1;
     }
@@ -44,7 +44,7 @@ int main() {
   printf("RUN PrintAllEntries\n");
   int id = rand() % RECORDS_NUM;
   if(HT_GetAllEntries(info, &id) == -1){
-    return -1;
+    printf("Error finding record with id: %d\n", id);
   }
 
   HT_CloseFile(info);
