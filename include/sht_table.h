@@ -3,16 +3,15 @@
 #include <record.h>
 #include <ht_table.h>
 
-#define MAX_NUMBER_OF_BUCKETS_ON_SHT 10
 #define SHT_RECORDS_PER_BLOCK ((BF_BLOCK_SIZE / sizeof(SHT_Record)) - 1)
 
 
 typedef struct {
-    int fileDescriptor;
-    char *fileName;
-    long int numberOfBuckets;
-    int bucketDefinitionsBlock;
-    int hashtableMapping[MAX_NUMBER_OF_BUCKETS_ON_SHT];
+    int FileDescriptor;
+    char FileName[15];
+    int NumberOfBuckets;
+    int BucketDefinitionsBlock;
+    int *HashtableMapping;
 } SHT_info;
 
 typedef struct {

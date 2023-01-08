@@ -95,7 +95,6 @@ int HT_CloseFile( HT_info* HT_info ){
     
     strcpy(fileName, HT_info->FileName);
     free(HT_info->HashtableMapping);
-    free(HT_info);
     
     CALL_OR_DIE(BF_CloseFile(HT_info->FileDescriptor));
     remove(fileName);
@@ -112,29 +111,35 @@ int HT_InsertEntry(HT_info* ht_info, Record record){
     HT_block_info block_info;
 
     hashValue = hash(record.id, ht_info->NumberOfBuckets);
+    
     BF_Block_Init(&block);
-    CALL_OR_DIE(BF_GetBlock(ht_info->FileDescriptor, ht_info->HashtableMapping[hashValue], block));
 
+    CALL_OR_DIE(BF_GetBlock(ht_info->FileDescriptor, ht_info->HashtableMapping[hashValue], block));
     data = BF_Block_GetData(block);
     memcpy( &block_info, (data + (RECORDS_PER_BLOCK * sizeof(Record)) + 10), sizeof(HT_block_info));
 
     if(block_info.RecordCount == RECORDS_PER_BLOCK){
         CALL_OR_DIE(BF_UnpinBlock(block));
+        
         BF_Block_Destroy(&block);
         if(SetUpNewBlock(ht_info, record, ht_info->HashtableMapping[hashValue]) != 0){
             return -1;
         }
-        CALL_OR_DIE(BF_GetBlockCounter(ht_info->FileDescriptor, &numberOfBlocks));
 
+        CALL_OR_DIE(BF_GetBlockCounter(ht_info->FileDescriptor, &numberOfBlocks));
         ht_info->HashtableMapping[hashValue] = numberOfBlocks - 1;
+
         return ht_info->HashtableMapping[hashValue];
     }
+
     records = (Record*)data;
     records[block_info.RecordCount] = record;
     BF_Block_SetDirty(block);
     CALL_OR_DIE(BF_UnpinBlock(block));
+
     block_info.RecordCount++;
     memcpy((data + (RECORDS_PER_BLOCK * sizeof(Record)) + 10), &block_info, sizeof(HT_block_info));
+
     BF_Block_Destroy(&block);
 
     return ht_info->HashtableMapping[hashValue];
@@ -164,6 +169,7 @@ int HT_GetAllEntries(HT_info* ht_info, void *value ){
         data = BF_Block_GetData(block);
         memcpy( &block_info, (data + (RECORDS_PER_BLOCK * sizeof(Record)) + 10), sizeof(HT_block_info));
         records = (Record*) data;
+        
         for(recordCounter = 0; recordCounter < block_info.RecordCount; recordCounter++){
             if(records[recordCounter].id == (*(int *)value)){
                 CALL_OR_DIE(BF_UnpinBlock(block));
@@ -173,9 +179,11 @@ int HT_GetAllEntries(HT_info* ht_info, void *value ){
                 return blocksSearched;
             }
         }
+        
         CALL_OR_DIE(BF_UnpinBlock(block));
         blocksSearched++;
         currentBlockId = block_info.PreviousBlockId;
+    
     }while(currentBlockId != 0);
 
     BF_Block_Destroy(&block);

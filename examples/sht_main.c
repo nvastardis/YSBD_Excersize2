@@ -26,13 +26,11 @@ int main() {
     // Αρχικοποιήσεις
     HT_CreateFile(FILE_NAME,10);
     if(SHT_CreateSecondaryIndex(INDEX_NAME,10,FILE_NAME) == -1){
-        printf("Error Creating SHT file");
         return -1;
     }
     HT_info* info = HT_OpenFile(FILE_NAME);
     SHT_info* index_info = SHT_OpenSecondaryIndex(INDEX_NAME);
     if(index_info == NULL){
-        printf("Error Opening SHT file");
         return -1;
     }
     // Θα ψάξουμε στην συνέχεια το όνομα searchName
@@ -43,7 +41,6 @@ int main() {
     // Κάνουμε εισαγωγή τυχαίων εγγραφών τόσο στο αρχείο κατακερματισμού τις οποίες προσθέτουμε και στο δευτερεύον ευρετήριο
     printf("Insert Entries\n");
 
-    int vagCounter = 0;
     for (int id = 0; id < RECORDS_NUM; ++id) {
         int block_id;
         record = randomRecord();
@@ -54,20 +51,21 @@ int main() {
             printf("Error Inserting Entry on SHT %d", block_id);
             return -1;
         }
-        if(strcmp(record.name, "Maria") == 0){
-          vagCounter++;
-        }
     }
-    printf("Maria found %d times\n", vagCounter);
     // Τυπώνουμε όλες τις εγγραφές με όνομα searchName
-    printf("RUN PrintAllEntries for name %s\n", "Maria");
-    if(SHT_SecondaryGetAllEntries(info,index_info,"Maria") == -1){
+    printf("RUN PrintAllEntries for name %s\n", searchName);
+    if(SHT_SecondaryGetAllEntries(info,index_info, searchName) == -1){
       return -1;
     }
 
+    HT_info *ht_info = malloc(sizeof(HT_info));
+    strcpy(ht_info->FileName, info->FileName);
+    ht_info->FileDescriptor = info->FileDescriptor;
+    ht_info->HashtableMapping = info->HashtableMapping;
+    
     // Κλείνουμε το αρχείο κατακερματισμού και το δευτερεύον ευρετήριο
     SHT_CloseSecondaryIndex(index_info);
-    HT_CloseFile(info);
+    HT_CloseFile(ht_info);
     //
     BF_Close();
 }
