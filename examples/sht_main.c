@@ -6,7 +6,7 @@
 #include "ht_table.h"
 #include "sht_table.h"
 
-#define RECORDS_NUM 30 // you can change it if you want
+#define RECORDS_NUM 1250 // you can change it if you want
 #define FILE_NAME "data.db"
 #define INDEX_NAME "index.db"
 
@@ -59,13 +59,13 @@ int main() {
     }
 
     HT_info *ht_info = malloc(sizeof(HT_info));
-    strcpy(ht_info->FileName, info->FileName);
     ht_info->FileDescriptor = info->FileDescriptor;
     ht_info->HashtableMapping = info->HashtableMapping;
     
     // Κλείνουμε το αρχείο κατακερματισμού και το δευτερεύον ευρετήριο
     SHT_CloseSecondaryIndex(index_info);
     HT_CloseFile(ht_info);
-    //
+    SHT_HashStatistics(INDEX_NAME);
+    HT_HashStatistics(FILE_NAME);
     BF_Close();
 }

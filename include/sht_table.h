@@ -7,11 +7,11 @@
 
 
 typedef struct {
-    int FileDescriptor;
     char FileName[15];
+    int FileDescriptor;
     int NumberOfBuckets;
     int BucketDefinitionsBlock;
-    int *HashtableMapping;
+    Bucket_Info *HashtableMapping;
 } SHT_info;
 
 typedef struct {
@@ -76,5 +76,6 @@ int SHT_SecondaryGetAllEntries(
     SHT_info* header_info, /* επικεφαλίδα του αρχείου δευτερεύοντος ευρετηρίου*/
     char* name /* το όνομα στο οποίο γίνεται αναζήτηση */);
 
+int SHT_HashStatistics( char* filename /* όνομα του αρχείου που ενδιαφέρει */ );
 
 #endif // SHT_FILE_H
