@@ -15,6 +15,16 @@
   }                         \
 }
 
+#define CALL_OR_DIE_POINTER(call) \
+{                                 \
+    BF_ErrorCode code = call;     \
+    if (code != BF_OK) {          \
+        BF_PrintError(code);      \
+        return NULL;              \
+    }                             \
+}
+
+
 int SetUpNewBlock(HP_info *hp_info, Record record);
 
 int HP_CreateFile(char *fileName){
@@ -31,7 +41,6 @@ int HP_CreateFile(char *fileName){
 
     CALL_OR_DIE(BF_AllocateBlock( fileDesc, firstBlock));
     hp_info = (HP_info *) BF_Block_GetData(firstBlock);
-    hp_info->FileDescriptor = fileDesc;
 
     BF_Block_SetDirty(firstBlock);
     CALL_OR_DIE(BF_UnpinBlock(firstBlock));
@@ -51,19 +60,14 @@ HP_info* HP_OpenFile(char *fileName){
         return NULL;
     }
 
-    code = BF_OpenFile(fileName, &fileInfo->FileDescriptor);
-    if(code != BF_OK){
-        return NULL;
-    }
-    strcpy(fileInfo->FileName, fileName);
+    CALL_OR_DIE_POINTER(BF_OpenFile(fileName, &fileInfo->FileDescriptor));
+    
     return fileInfo;
 }
 
 
 int HP_CloseFile( HP_info* hp_info ){
     CALL_OR_DIE(BF_CloseFile(hp_info->FileDescriptor));
-    remove(hp_info->FileName);
-    free(hp_info);
     return 0;
 }
 
@@ -79,28 +83,29 @@ int HP_InsertEntry(HP_info* hp_info, Record record){
     if(numberOfBlocks == 1){
         return (SetUpNewBlock(hp_info, record));
     }
-    else{
-        BF_Block_Init(&block);
 
-        CALL_OR_DIE(BF_GetBlock(hp_info->FileDescriptor, numberOfBlocks - 1, block));
-        data = BF_Block_GetData(block);
-        memcpy(&block_info, (HP_block_info*)(data + (RECORDS_PER_BLOCK * sizeof(Record)) + 10), sizeof(HP_block_info));
-        if(block_info.RecordCount ==RECORDS_PER_BLOCK){
-            CALL_OR_DIE(BF_UnpinBlock(block));
-            BF_Block_Destroy(&block);
-            
-            return (SetUpNewBlock(hp_info, record));
-        }
-        records = (Record*)data;
-        records[block_info.RecordCount] = record;
-        BF_Block_SetDirty(block);
+    BF_Block_Init(&block);
+
+    CALL_OR_DIE(BF_GetBlock(hp_info->FileDescriptor, numberOfBlocks - 1, block));
+    data = BF_Block_GetData(block);
+    memcpy(&block_info, (data + BF_BLOCK_SIZE - sizeof(HP_block_info)), sizeof(HP_block_info));
+
+    if(block_info.RecordCount ==RECORDS_PER_BLOCK){
         CALL_OR_DIE(BF_UnpinBlock(block));
-
-        block_info.RecordCount++;
-        memcpy( (HP_block_info*)(data + (RECORDS_PER_BLOCK * sizeof(Record)) + 10), &block_info, sizeof(HP_block_info));
-
         BF_Block_Destroy(&block);
+        
+        return (SetUpNewBlock(hp_info, record));
     }
+    
+    records = (Record*)data;
+    records[block_info.RecordCount] = record;
+    BF_Block_SetDirty(block);
+    CALL_OR_DIE(BF_UnpinBlock(block));
+
+    block_info.RecordCount++;
+    memcpy( (data + BF_BLOCK_SIZE - sizeof(HP_block_info)), &block_info, sizeof(HP_block_info));
+
+    BF_Block_Destroy(&block);
     return numberOfBlocks - 1;
 
 }
@@ -128,7 +133,7 @@ int HP_GetAllEntries(HP_info* hp_info, int value){
 
         CALL_OR_DIE(BF_GetBlock(hp_info->FileDescriptor, counter, block));
         data = BF_Block_GetData(block);
-        memcpy( &block_info, (data + (RECORDS_PER_BLOCK * sizeof(Record)) + 10), sizeof(HP_block_info));
+        memcpy( &block_info, (data + BF_BLOCK_SIZE - sizeof(HP_block_info)), sizeof(HP_block_info));
         records = (Record*) data;
 
         for(recordCounter = 0; recordCounter < block_info.RecordCount; recordCounter++){
@@ -164,7 +169,7 @@ int SetUpNewBlock(HP_info *hp_info, Record record){
     CALL_OR_DIE(BF_UnpinBlock(block));
 
     block_info.RecordCount = 1;
-    memcpy( (data + (RECORDS_PER_BLOCK * sizeof(Record)) + 10), &block_info, sizeof(HP_block_info));
+    memcpy( (data + BF_BLOCK_SIZE - sizeof(HP_block_info)), &block_info, sizeof(HP_block_info));
 
     BF_Block_Destroy(&block);
 

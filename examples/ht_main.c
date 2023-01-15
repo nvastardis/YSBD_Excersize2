@@ -20,7 +20,7 @@
 int main() {
   BF_Init(LRU);
 
-  if(HT_CreateFile(FILE_NAME,10)){
+  if(HT_CreateFile(FILE_NAME,15)){
     return -1;
   }
 
@@ -48,5 +48,7 @@ int main() {
   }
 
   HT_CloseFile(info);
+  HT_HashStatistics(FILE_NAME);
   BF_Close();
+  
 }

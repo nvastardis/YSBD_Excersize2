@@ -3,14 +3,19 @@
 #include <record.h>
 
 #define MAX_NUMBER_OF_BUCKETS 20
-#define RECORDS_PER_BLOCK 6
+#define RECORDS_PER_BLOCK BF_BLOCK_SIZE / sizeof(Record)
 
 typedef struct {
-    char FileName[15];
+    int NumberOfBlocks;
+    int NumberOfRecords;
+    int CorrespondingBlock;
+} Bucket_Info;
+
+typedef struct {
     int FileDescriptor;
     int NumberOfBuckets;
     int BucketDefinitionsBlock;
-    int *HashtableMapping;
+    Bucket_Info *HashtableMapping;
 } HT_info;
 
 typedef struct {
@@ -61,6 +66,8 @@ int HT_InsertEntry(HT_info* header_info, /*επικεφαλίδα του αρχ�
 (όπως αυτό ορίζεται στην HT_info) ίση με value, εκτυπώνονται τα περιεχόμενά της (συμπεριλαμβανομένου και του πεδίου-κλειδιού). Να επιστρέφεται επίσης το πλήθος των blocks που διαβάστηκαν μέχρι να βρεθούν όλες οι εγγραφές. Σε περίπτωση επιτυχίας επιστρέφει το πλήθος των blocks που διαβάστηκαν, ενώ σε περίπτωση λάθους επιστρέφει -1.*/
 int HT_GetAllEntries(HT_info* header_info, /*επικεφαλίδα του αρχείου*/
 	void *value /*τιμή του πεδίου-κλειδιού προς αναζήτηση*/);
+
+int HT_HashStatistics( char* filename /* όνομα του αρχείου που ενδιαφέρει */ );
 
 
 #endif // HT_FILE_H
