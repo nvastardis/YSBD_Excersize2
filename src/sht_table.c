@@ -119,6 +119,7 @@ int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
 
     BF_Block_Init(&block);
     currentBlockId = sht_info->HashtableMapping[hashValue].CorrespondingBlock;
+
     do{
         CALL_OR_DIE(BF_GetBlock(sht_info->FileDescriptor, currentBlockId, block));
         data = BF_Block_GetData(block);
@@ -137,12 +138,18 @@ int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
         currentBlockId = block_info.PreviousBlockId;
     }while (currentBlockId != -1);
     
+    currentBlockId = sht_info->HashtableMapping[hashValue].CorrespondingBlock;
+    CALL_OR_DIE(BF_GetBlock(sht_info->FileDescriptor, currentBlockId, block));
+    data = BF_Block_GetData(block);
+    memcpy(&block_info, (data + BF_BLOCK_SIZE - sizeof(SHT_block_info)), sizeof(SHT_block_info));
 
-    if(block_info.RecordCount == RECORDS_PER_BLOCK){
+    if(block_info.RecordCount >= SHT_RECORDS_PER_BLOCK){
         CALL_OR_DIE(BF_UnpinBlock(block));
         BF_Block_Destroy(&block);
         return SetUpNewBlockInSht(sht_info, newShtRecord, sht_info->HashtableMapping[hashValue].CorrespondingBlock);
     }
+    
+
 
     shtRecords = (SHT_Record*)data;
     shtRecords[block_info.RecordCount] = newShtRecord;
