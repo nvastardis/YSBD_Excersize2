@@ -4,6 +4,7 @@
 
 #define RECORDS_PER_BLOCK BF_BLOCK_SIZE / sizeof(Record)
 
+/* Δομή αποθήκευσης μεταδεδομένων που σχετίζονται με τα μπλοκ του αρχείου σωρού*/
 typedef struct {
   int RecordCount;
 } HP_block_info;

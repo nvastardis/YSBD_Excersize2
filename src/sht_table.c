@@ -9,13 +9,23 @@
 #include "block_list.h"
 
 #define CALL_OR_DIE(call)     \
-  {                           \
+{                           \
     BF_ErrorCode code = call; \
     if (code != BF_OK) {      \
-      BF_PrintError(code);    \
-      return -1;             \
+        BF_PrintError(code);    \
+        return -1;             \
     }                         \
-  }
+}
+
+
+#define CALL_OR_DIE_POINTER(call) \
+{                                 \
+    BF_ErrorCode code = call;     \
+    if (code != BF_OK) {          \
+        BF_PrintError(code);      \
+        return NULL;              \
+    }                             \
+}
 
 int SetUpNewBlockInSht(SHT_info *Sht_info, SHT_Record record, int previousBlockId);
 int hashName(char *value, int numberOfBuckets);
@@ -26,12 +36,13 @@ int SHT_CreateSecondaryIndex(char *sfileName,  int buckets, char* fileName){
     SHT_info *sht_info;
     BF_Block *firstBlock;
 
+    /* Διαγραφή αρχείου για το secondary hash table implementation(που μπορεί να έχει απομείνει από προηγούμενη εκτέλεση) δημιουργεία και άνοιγμα νέου αρχείου sht*/
     remove(sfileName);
     CALL_OR_DIE(BF_CreateFile(sfileName));
     CALL_OR_DIE(BF_OpenFile(sfileName, &fileDesc));
 
+    /* Δημιουργία πρώτου μπλοκ και αποθήκευση μεταδεδομένων του sht σε αυτό*/
     BF_Block_Init(&firstBlock);
-    
     CALL_OR_DIE(BF_AllocateBlock( fileDesc, firstBlock));
     sht_info = (SHT_info *) BF_Block_GetData(firstBlock);
     
@@ -45,6 +56,7 @@ int SHT_CreateSecondaryIndex(char *sfileName,  int buckets, char* fileName){
         buckets = MAX_NUMBER_OF_BUCKETS;
     }
     
+    /* Αρχειοθέτη πίνακα Κάδων του Hash Table */
     sht_info->HashtableMapping = malloc(buckets * sizeof(Bucket_Info));
     for(counter = 0; counter < buckets; counter++){
         sht_info->HashtableMapping[counter].CorrespondingBlock = -1;
@@ -56,6 +68,7 @@ int SHT_CreateSecondaryIndex(char *sfileName,  int buckets, char* fileName){
     CALL_OR_DIE(BF_UnpinBlock(firstBlock));
     
     BF_Block_Destroy(&firstBlock);
+    /* Κλείσιμο αρχείου */
     CALL_OR_DIE(BF_CloseFile(fileDesc));
     return 0;
 }
@@ -66,26 +79,16 @@ SHT_info* SHT_OpenSecondaryIndex(char *indexName){
     SHT_info *data;
     BF_Block *block;
 
-    code = BF_OpenFile(indexName, &fileDesc);
-    if(code != BF_OK){
-        return NULL;
-    }
+    /* Άνοιγμα του αρχείου και ενημέρωση του fileDescriptor*/
+    CALL_OR_DIE_POINTER(BF_OpenFile(indexName, &fileDesc));
 
     BF_Block_Init(&block);
     
-    code = BF_GetBlock(fileDesc, 0, block);
-    if(code != BF_OK){
-        BF_PrintError(code);
-        return NULL;
-    }
+    CALL_OR_DIE_POINTER(BF_GetBlock(fileDesc, 0, block));
     data = (SHT_info*)BF_Block_GetData(block);
     data->FileDescriptor = fileDesc;
     BF_Block_SetDirty(block);
-    code = BF_UnpinBlock(block);
-    if(code != BF_OK){
-        BF_PrintError(code);
-        return NULL;
-    }
+    CALL_OR_DIE_POINTER(BF_UnpinBlock(block));
     
     BF_Block_Destroy(&block);
     return data;
@@ -93,6 +96,7 @@ SHT_info* SHT_OpenSecondaryIndex(char *indexName){
 
 
 int SHT_CloseSecondaryIndex( SHT_info* SHT_info ){
+    /* Κλείσιμο αρχείου */
     CALL_OR_DIE(BF_CloseFile(SHT_info->FileDescriptor));
     return 0;
 }
@@ -107,19 +111,23 @@ int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
     SHT_Record *shtRecords, newShtRecord;
     SHT_block_info block_info;
 
-
+    /* Δημιουργία εγγραφής για το δευτερεύων ευρετήριο με βάση την εγγραφή του πρωτεύοντος */
     strcpy(newShtRecord.name, record.name);
     newShtRecord.blockId = block_id;
     newShtRecord.numberOfAppearences = 0;
     hashValue = hashName(newShtRecord.name, sht_info->NumberOfBuckets);
     
+    /* Αν δεν έχει οριστεί ακόμα μπλοκ στον κάδο, δημιουργία καινούριου μπλοκ και αποθήκευση νεας εγγραφής*/
     if(sht_info->HashtableMapping[hashValue].CorrespondingBlock == -1){
         return SetUpNewBlockInSht(sht_info, newShtRecord, sht_info->HashtableMapping[hashValue].CorrespondingBlock);
     }
 
+    /* Φόρτωση μπλοκ που αντιστοιχεί στον κάδο της εγγραφής*/
     BF_Block_Init(&block);
     currentBlockId = sht_info->HashtableMapping[hashValue].CorrespondingBlock;
 
+    /* Αν βρεθεί σε ένα από τα μπλοκ που έχουν αντιστοιχιθεί στον κάδο, εγγρφή με τα ίδια στοιχεία, ενημέρωση του αριθμού εμφανίσεων του ονόματος στο ίδιο μπλοκ,
+    στην εγγραφή του δευτερεύοντος ευρετηρίου και επιστροφή */
     do{
         CALL_OR_DIE(BF_GetBlock(sht_info->FileDescriptor, currentBlockId, block));
         data = BF_Block_GetData(block);
@@ -138,19 +146,20 @@ int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
         currentBlockId = block_info.PreviousBlockId;
     }while (currentBlockId != -1);
     
+    /* Φόρτωση μπλοκ που αντιστοιχεί στον κάδο της εγγραφής*/
     currentBlockId = sht_info->HashtableMapping[hashValue].CorrespondingBlock;
     CALL_OR_DIE(BF_GetBlock(sht_info->FileDescriptor, currentBlockId, block));
     data = BF_Block_GetData(block);
     memcpy(&block_info, (data + BF_BLOCK_SIZE - sizeof(SHT_block_info)), sizeof(SHT_block_info));
-
+    
+    /* Αν ειναι γεμάτο, δημιουργία νέου μπλοκ για τον κάδο και αποθήκευση νέας εγγραφής */
     if(block_info.RecordCount >= SHT_RECORDS_PER_BLOCK){
         CALL_OR_DIE(BF_UnpinBlock(block));
         BF_Block_Destroy(&block);
         return SetUpNewBlockInSht(sht_info, newShtRecord, sht_info->HashtableMapping[hashValue].CorrespondingBlock);
     }
     
-
-
+    /* Αποθήκευση νέας εγγραφής και ενημέρωση μεταδεδομένων του μπλοκ και του bucket*/
     shtRecords = (SHT_Record*)data;
     shtRecords[block_info.RecordCount] = newShtRecord;
     BF_Block_SetDirty(block);
@@ -192,10 +201,13 @@ int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name)
     blocksSearched = 0;
     fileFound = 0;
     hashValue = hashName(name, sht_info->NumberOfBuckets);
+    /* Εύρεση του κάδου στον οποίο αντιστοιχεί η εγγραφή */
     currentBlockId = sht_info->HashtableMapping[hashValue].CorrespondingBlock;
     
     BF_Block_Init(&block);
 
+    /* Για κάθε μπλοκ που αντιστοιχούν στον κάδο, αναζήτηση εντός των εγγραφών του για το όνομα που ζητήθηκε. 
+    Κάθε φορά που θα εντοπίζεται, αποθήκευση του αντιστοιχισμένου μπλοκ στο πρωτεύον ευρετήριο και του αριθμού εμφανίσεων του, στην προσωρινή λίστα αποθήκευσης των block id*/
     do{
         SHT_block_info sht_block_info;
 
@@ -217,10 +229,14 @@ int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name)
 
     }while(currentBlockId != -1);
 
+    /* Αν η λίστα προσωρινής αποθήκευσης είναι κενή, δε βρέθηκε όνομα με τη συγκεκριμένη εγγραφή */
     if(resultList->Length == 0){
-        return -1;
+        printf("Record with name: %s not found", name );
+        return blocksSearched;
     }
     
+    /* Για κάθε block_id στην προσωρινή λίστα, φόρτωση του αντίστοιχου μπλοκ από το πρωτεύον ευρετήριο.
+    Αναζήτση στις εγγρφές τους για το αναζητούμενο όνομα και εντύπωση των αντίστοιχων εγγραφών*/
     trv = resultList->Head;
     while(trv != NULL){
         HT_block_info ht_block_info;
@@ -242,7 +258,6 @@ int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name)
         }
 
         CALL_OR_DIE(BF_UnpinBlock(block));
-        blocksSearched++;
         trv = trv->NextNode;
 
     }

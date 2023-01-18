@@ -34,10 +34,12 @@ int HT_CreateFile(char *fileName,  int buckets){
     HT_info *ht_info;
     BF_Block *firstBlock;
 
+    /* Διαγραφή αρχείου για το hash table implementation, που μπορεί να έχει απομείνει από προηγούμενη εκτέλεση, δημιουργεία και άνοιγμα νέου αρχείου ht*/
     remove(fileName);
     CALL_OR_DIE(BF_CreateFile(fileName));
     CALL_OR_DIE(BF_OpenFile(fileName, &fileDesc));
 
+    /* Δημιουργία πρώτου μπλοκ και αποθήκευση μεταδεδομένων του ht σε αυτό*/
     BF_Block_Init(&firstBlock);
 
     CALL_OR_DIE(BF_AllocateBlock( fileDesc, firstBlock));
@@ -52,6 +54,7 @@ int HT_CreateFile(char *fileName,  int buckets){
         buckets = MAX_NUMBER_OF_BUCKETS;
     }
 
+    /* Αρχειοθέτη πίνακα Κάδων του Hash Table */
     ht_info->HashtableMapping = malloc(buckets * sizeof(Bucket_Info));
     for(counter = 0; counter < buckets; counter++){
         ht_info->HashtableMapping[counter].CorrespondingBlock = -1;
@@ -63,6 +66,8 @@ int HT_CreateFile(char *fileName,  int buckets){
     CALL_OR_DIE(BF_UnpinBlock(firstBlock));
     
     BF_Block_Destroy(&firstBlock);
+    
+    /* Κλείσιμο αρχείου */
     CALL_OR_DIE(BF_CloseFile(fileDesc));
     return 0;
 }
@@ -73,6 +78,7 @@ HT_info* HT_OpenFile(char *fileName){
     BF_Block *block;
     BF_ErrorCode code;
     
+    /* Άνοιγμα του αρχείου και ενημέρωση του fileDescriptor*/
     CALL_OR_DIE_POINTER(BF_OpenFile(fileName, &fileDesc));
 
     BF_Block_Init(&block);
@@ -91,6 +97,7 @@ HT_info* HT_OpenFile(char *fileName){
 
 
 int HT_CloseFile( HT_info* ht_info ){
+    /* Κλείσιμο αρχείου */
     CALL_OR_DIE(BF_CloseFile(ht_info->FileDescriptor));
     return 0;
 }
@@ -106,21 +113,25 @@ int HT_InsertEntry(HT_info* ht_info, Record record){
 
     hashValue = hash(record.id, ht_info->NumberOfBuckets);
     
+    /* Αν δεν έχει οριστεί ακόμα μπλοκ στον κάδο, δημιουργία καινούριου μπλοκ και αποθήκευση νεας εγγραφής*/
     if(ht_info->HashtableMapping[hashValue].CorrespondingBlock == -1){
         return SetUpNewBlock(ht_info, record, ht_info->HashtableMapping[hashValue].CorrespondingBlock);
     }
     
+    /* Φόρτωση μπλοκ που αντιστοιχεί στον κάδο της εγγραφής*/
     BF_Block_Init(&block);
     CALL_OR_DIE(BF_GetBlock(ht_info->FileDescriptor, ht_info->HashtableMapping[hashValue].CorrespondingBlock, block));
     data = BF_Block_GetData(block);
     memcpy( &block_info, (data + BF_BLOCK_SIZE - sizeof(HT_block_info)), sizeof(HT_block_info));
 
+    /* Αν ειναι γεμάτο, δημιουργία νέου μπλοκ για τον κάδο και αποθήκευση νέας εγγραφής */
     if(block_info.RecordCount == RECORDS_PER_BLOCK){
         CALL_OR_DIE(BF_UnpinBlock(block));
         BF_Block_Destroy(&block);
         return SetUpNewBlock(ht_info, record, ht_info->HashtableMapping[hashValue].CorrespondingBlock);
     }
 
+    /* Αποθήκευση νέας εγγραφής και ενημέρωση μεταδεδομένων του μπλοκ και του bucket*/
     records = (Record*)data;
     records[block_info.RecordCount] = record;
     BF_Block_SetDirty(block);
@@ -153,10 +164,13 @@ int HT_GetAllEntries(HT_info* ht_info, void *value ){
     blocksSearched = 0;
     fileFound = 0;
     hashValue = hash(*(int *)value, ht_info->NumberOfBuckets);
+    /* Εύρεση του κάδου στον οποίο αντιστοιχεί η εγγραφή */
     currentBlockId = ht_info->HashtableMapping[hashValue].CorrespondingBlock;
 
     BF_Block_Init(&block);
 
+    /* Για κάθε μπλοκ που αντιστοιχούν στον κάδο, αναζήτηση εντός των εγγραφών του για την εγγραφή.
+    Μόλις βρεθεί, τυπώνεται η εγγραφή και επιστρέφεται ο αριθμός των blocks. Αν δε βρεθεί η εγγραφή απλά τυπώνεται σχετικό μήνυμα. */
     do{
         CALL_OR_DIE(BF_GetBlock(ht_info->FileDescriptor, currentBlockId, block));
         data = BF_Block_GetData(block);
@@ -179,13 +193,15 @@ int HT_GetAllEntries(HT_info* ht_info, void *value ){
         currentBlockId = block_info.PreviousBlockId;
     
     }while(currentBlockId != 0);
-
     BF_Block_Destroy(&block);
+    if(blocksSearched == ht_info->HashtableMapping[hashValue].NumberOfBlocks){
+        printf("Record with id: %d not found", *(int *)value );
+    }
     return blocksSearched;
 
 }
 
-
+/* Εκτύπωση στατιστικών του πρωτεύοντος ευρετηρίου με τη βοήθεια των μεταδεδομένων του αρχείου και των κάδων */
 int HT_HashStatistics( char* filename){
     int fileDesc,
         numberOfBlocks,
@@ -266,7 +282,7 @@ int HT_HashStatistics( char* filename){
     return 0;
 }
 
-
+/* Βοηθητική συνάρτηση δημιουργίας νέου μπλοκ και ενημέρωσης μεταδεδομένων του κάδου */
 int SetUpNewBlock(HT_info *ht_info, Record record, int previousBlockId){
     int counter,
         numberOfBlocks,

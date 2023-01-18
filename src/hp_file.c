@@ -33,10 +33,12 @@ int HP_CreateFile(char *fileName){
     HP_info *hp_info;
     BF_Block *firstBlock;
 
+    /* Διαγραφή αρχείου για το heap implementation, που μπορεί να έχει απομείνει από προηγούμενη εκτέλεση, δημιουργεία και άνοιγμα νέου αρχείου hp*/
     remove(fileName);
     CALL_OR_DIE(BF_CreateFile(fileName));
     CALL_OR_DIE(BF_OpenFile(fileName, &fileDesc));
 
+    /* Δημιουργία πρώτου μπλοκ και αποθήκευση μεταδεδομένων του heap σε αυτό*/
     BF_Block_Init(&firstBlock);
 
     CALL_OR_DIE(BF_AllocateBlock( fileDesc, firstBlock));
@@ -46,7 +48,8 @@ int HP_CreateFile(char *fileName){
     CALL_OR_DIE(BF_UnpinBlock(firstBlock));
 
     BF_Block_Destroy(&firstBlock);
-
+    
+    /* Κλείσιμο αρχείου */
     CALL_OR_DIE(BF_CloseFile(fileDesc));
     return 0;
 }
@@ -59,7 +62,7 @@ HP_info* HP_OpenFile(char *fileName){
     if(fileInfo == NULL){
         return NULL;
     }
-
+    /* Άνοιγμα του αρχείου και ενημέρωση του fileDescriptor*/
     CALL_OR_DIE_POINTER(BF_OpenFile(fileName, &fileInfo->FileDescriptor));
     
     return fileInfo;
@@ -67,6 +70,7 @@ HP_info* HP_OpenFile(char *fileName){
 
 
 int HP_CloseFile( HP_info* hp_info ){
+    /* Κλείσιμο αρχείου*/
     CALL_OR_DIE(BF_CloseFile(hp_info->FileDescriptor));
     return 0;
 }
@@ -79,24 +83,27 @@ int HP_InsertEntry(HP_info* hp_info, Record record){
     Record *records;
     HP_block_info block_info;
     CALL_OR_DIE(BF_GetBlockCounter(hp_info->FileDescriptor, &numberOfBlocks));
-    
+
+    /* Αν το μόνο μπλοκ που υπάρχει είναι το πρώτομ, δημιούργησε καινούριο και αποθήκευσε την νέα εγγραφή*/
     if(numberOfBlocks == 1){
         return (SetUpNewBlock(hp_info, record));
     }
 
     BF_Block_Init(&block);
-
+    /* Εύρεση τελευταίου μπλοκ στο αρχείο */
     CALL_OR_DIE(BF_GetBlock(hp_info->FileDescriptor, numberOfBlocks - 1, block));
     data = BF_Block_GetData(block);
     memcpy(&block_info, (data + BF_BLOCK_SIZE - sizeof(HP_block_info)), sizeof(HP_block_info));
-
-    if(block_info.RecordCount ==RECORDS_PER_BLOCK){
+    
+    /* Αν το τελευταίο μπλοκ είναι γεμάτο φτιάξε νέο μπλοκ και αποθήκευσε την νέα εγγραφή*/
+    if(block_info.RecordCount == RECORDS_PER_BLOCK){
         CALL_OR_DIE(BF_UnpinBlock(block));
         BF_Block_Destroy(&block);
         
         return (SetUpNewBlock(hp_info, record));
     }
     
+    /* Αποθήκευση νέας εγγραφής και ενημέρωση μεταδεδομένων του μπλοκ*/
     records = (Record*)data;
     records[block_info.RecordCount] = record;
     BF_Block_SetDirty(block);
@@ -121,14 +128,17 @@ int HP_GetAllEntries(HP_info* hp_info, int value){
     BF_Block *block;
     HP_block_info block_info;
     
-
-    blocksSearched = 0;
-    fileFound = 0;
+    /* Εύρεση του συνόλου των μπλοκ στο αρχείο */
     CALL_OR_DIE(BF_GetBlockCounter(hp_info->FileDescriptor, &blocksInFile));
 
 
     BF_Block_Init(&block);
 
+    blocksSearched = 0;
+    fileFound = 0;
+
+    /* Ξεκινώντας από το δεύτερο μπλοκ του αρχείου, γίνεται σειριακή αναζήτηση στις εγγραφές του κάθε μπλοκ μέχρι να βρείς τη συγκεκριμένη εγγραφή.
+    Μόλις βρεθεί, τυπώνεται η εγγραφή και επιστρέφεται ο αριθμός των blocks. Αν δε βρεθεί η εγγραφή απλά τυπώνεται σχετικό μήνυμα. */
     for(counter = 1; counter < blocksInFile; counter++){
 
         CALL_OR_DIE(BF_GetBlock(hp_info->FileDescriptor, counter, block));
@@ -148,9 +158,13 @@ int HP_GetAllEntries(HP_info* hp_info, int value){
         blocksSearched++;
     }
     BF_Block_Destroy(&block);
+    if(blocksSearched == blocksInFile){
+        printf("Record with id: %d was not found", value);
+    }
     return blocksSearched;
 }
 
+/* Βοηθητική συνάρτηση δημιουργίας νέου μπλοκ */
 int SetUpNewBlock(HP_info *hp_info, Record record){
     int counter,
         numberOfBlocks;

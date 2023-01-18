@@ -5,12 +5,14 @@
 #define MAX_NUMBER_OF_BUCKETS 20
 #define RECORDS_PER_BLOCK BF_BLOCK_SIZE / sizeof(Record)
 
+/* Δομή αποθήκευσης μεταδεδομένων κάδων πρωτεύοντος ευρετηρίου.*/
 typedef struct {
     int NumberOfBlocks;
     int NumberOfRecords;
     int CorrespondingBlock;
 } Bucket_Info;
 
+/* Δομή αποθήκευσης μεταδεδομένων πρωτεύοντος ευρετηρίου.*/
 typedef struct {
     int FileDescriptor;
     int NumberOfBuckets;
@@ -18,6 +20,7 @@ typedef struct {
     Bucket_Info *HashtableMapping;
 } HT_info;
 
+/* Δομή αποθήκευσης μεταδεδομένων μπλοκ εντός του πρωτεύοντος ευρετηρίου.*/
 typedef struct {
     int RecordCount;
     int PreviousBlockId;

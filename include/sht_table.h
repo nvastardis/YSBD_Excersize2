@@ -5,7 +5,7 @@
 
 #define SHT_RECORDS_PER_BLOCK ((BF_BLOCK_SIZE / sizeof(SHT_Record)) - 1)
 
-
+/* Δομή αποθήκευσης μεταδεδομένων δευτερεύοντος ευρετηρίου.*/
 typedef struct {
     char FileName[15];
     int FileDescriptor;
@@ -14,11 +14,13 @@ typedef struct {
     Bucket_Info *HashtableMapping;
 } SHT_info;
 
+/* Δομή αποθήκευσης μεταδεδομένων μπλοκ δευτερεύοντος ευρετηρίου.*/
 typedef struct {
     int RecordCount;
     int PreviousBlockId;
 } SHT_block_info;
 
+/* Δομή εγγραφών δευτερεύοντος ευρετηρίου.*/
 typedef struct{
     char name[15];
     int blockId;
