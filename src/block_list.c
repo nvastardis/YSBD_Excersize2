@@ -13,13 +13,14 @@ BlockList* Initialize(){
     return blockList;
 }
 
-void AddNode(BlockList* blockList, int newBlockId){
+void AddNode(BlockList* blockList, int newBlockId, int numberOfAppearences){
     BlockListNode *newNode, *traverser;
     newNode = malloc(sizeof(BlockListNode));
     if(newNode == NULL){
         return;
     }
     newNode->blockId = newBlockId;
+    newNode->numberOfAppearences = numberOfAppearences;
     newNode->NextNode = NULL;
 
     if(blockList->Head != NULL){

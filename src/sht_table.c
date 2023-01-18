@@ -110,6 +110,7 @@ int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
 
     strcpy(newShtRecord.name, record.name);
     newShtRecord.blockId = block_id;
+    newShtRecord.numberOfAppearences = 0;
     hashValue = hashName(newShtRecord.name, sht_info->NumberOfBuckets);
     
     if(sht_info->HashtableMapping[hashValue].CorrespondingBlock == -1){
@@ -121,15 +122,18 @@ int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
     do{
         CALL_OR_DIE(BF_GetBlock(sht_info->FileDescriptor, currentBlockId, block));
         data = BF_Block_GetData(block);
-        CALL_OR_DIE(BF_UnpinBlock(block));
         memcpy(&block_info, (data + BF_BLOCK_SIZE - sizeof(SHT_block_info)), sizeof(SHT_block_info));
         shtRecords = (SHT_Record*)data;
         for(counter = 0; counter < block_info.RecordCount; counter++){
             if((shtRecords[counter].blockId == block_id) && (strcmp(shtRecords[counter].name, record.name) == 0)){
+                shtRecords[counter].numberOfAppearences++;
+                BF_Block_SetDirty(block);
+                CALL_OR_DIE(BF_UnpinBlock(block));
                 BF_Block_Destroy(&block);
                 return currentBlockId;
             }
         }        
+        CALL_OR_DIE(BF_UnpinBlock(block));
         currentBlockId = block_info.PreviousBlockId;
     }while (currentBlockId != -1);
     
@@ -195,7 +199,7 @@ int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name)
         
         for(recordCounter = 0; recordCounter < sht_block_info.RecordCount; recordCounter++){
             if(strcmp(sht_BlockData[recordCounter].name, name) == 0){
-                AddNode(resultList, sht_BlockData[recordCounter].blockId);
+                AddNode(resultList, sht_BlockData[recordCounter].blockId, sht_BlockData[recordCounter].numberOfAppearences);
             }
         
         }
@@ -213,15 +217,20 @@ int SHT_SecondaryGetAllEntries(HT_info* ht_info, SHT_info* sht_info, char* name)
     trv = resultList->Head;
     while(trv != NULL){
         HT_block_info ht_block_info;
+        int resultsFounOnCurrentBlock;
+        
+        resultsFounOnCurrentBlock = 0;
+
 
         CALL_OR_DIE(BF_GetBlock(ht_info->FileDescriptor, trv->blockId, block));
         data = BF_Block_GetData(block);
         memcpy( &ht_block_info, (data + BF_BLOCK_SIZE - sizeof(HT_block_info)), sizeof(HT_block_info));
         ht_BlockData = (Record*) data;
 
-        for(recordCounter = 0; recordCounter < ht_block_info.RecordCount; recordCounter++){
+        for(recordCounter = 0; recordCounter < ht_block_info.RecordCount || resultsFounOnCurrentBlock < trv->numberOfAppearences; recordCounter++){
             if(strcmp(ht_BlockData[recordCounter].name, name) == 0){
                 printRecord(ht_BlockData[recordCounter]);
+                resultsFounOnCurrentBlock++;
             }
         }
 
