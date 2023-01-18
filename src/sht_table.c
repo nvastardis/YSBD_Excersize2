@@ -100,35 +100,48 @@ int SHT_CloseSecondaryIndex( SHT_info* SHT_info ){
 int SHT_SecondaryInsertEntry(SHT_info* sht_info, Record record, int block_id){
     int counter,
         numberOfBlocks,
-        hashValue;
+        hashValue,
+        currentBlockId;
     void *data;
     BF_Block *block;
-    SHT_Record *records, currentRecord;
+    SHT_Record *shtRecords, newShtRecord;
     SHT_block_info block_info;
 
 
-    strcpy(currentRecord.name, record.name);
-    currentRecord.blockId = block_id;
-    hashValue = hashName(currentRecord.name, sht_info->NumberOfBuckets);
+    strcpy(newShtRecord.name, record.name);
+    newShtRecord.blockId = block_id;
+    hashValue = hashName(newShtRecord.name, sht_info->NumberOfBuckets);
     
     if(sht_info->HashtableMapping[hashValue].CorrespondingBlock == -1){
-        return SetUpNewBlockInSht(sht_info, currentRecord, sht_info->HashtableMapping[hashValue].CorrespondingBlock);
+        return SetUpNewBlockInSht(sht_info, newShtRecord, sht_info->HashtableMapping[hashValue].CorrespondingBlock);
     }
 
     BF_Block_Init(&block);
+    currentBlockId = sht_info->HashtableMapping[hashValue].CorrespondingBlock;
+    do{
+        CALL_OR_DIE(BF_GetBlock(sht_info->FileDescriptor, currentBlockId, block));
+        data = BF_Block_GetData(block);
+        CALL_OR_DIE(BF_UnpinBlock(block));
+        memcpy(&block_info, (data + BF_BLOCK_SIZE - sizeof(SHT_block_info)), sizeof(SHT_block_info));
+        shtRecords = (SHT_Record*)data;
+        for(counter = 0; counter < block_info.RecordCount; counter++){
+            if((shtRecords[counter].blockId == block_id) && (strcmp(shtRecords[counter].name, record.name) == 0)){
+                BF_Block_Destroy(&block);
+                return currentBlockId;
+            }
+        }        
+        currentBlockId = block_info.PreviousBlockId;
+    }while (currentBlockId != -1);
     
-    CALL_OR_DIE(BF_GetBlock(sht_info->FileDescriptor, sht_info->HashtableMapping[hashValue].CorrespondingBlock, block));
-    data = BF_Block_GetData(block);
-    memcpy(&block_info, (data + BF_BLOCK_SIZE - sizeof(SHT_block_info)), sizeof(SHT_block_info));
 
     if(block_info.RecordCount == RECORDS_PER_BLOCK){
         CALL_OR_DIE(BF_UnpinBlock(block));
         BF_Block_Destroy(&block);
-        return SetUpNewBlockInSht(sht_info, currentRecord, sht_info->HashtableMapping[hashValue].CorrespondingBlock);
+        return SetUpNewBlockInSht(sht_info, newShtRecord, sht_info->HashtableMapping[hashValue].CorrespondingBlock);
     }
 
-    records = (SHT_Record*)data;
-    records[block_info.RecordCount] = currentRecord;
+    shtRecords = (SHT_Record*)data;
+    shtRecords[block_info.RecordCount] = newShtRecord;
     BF_Block_SetDirty(block);
     CALL_OR_DIE(BF_UnpinBlock(block));
 

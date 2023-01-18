@@ -6,7 +6,7 @@
 #include "ht_table.h"
 #include "sht_table.h"
 
-#define RECORDS_NUM 1250 // you can change it if you want
+#define RECORDS_NUM 100 // you can change it if you want
 #define FILE_NAME "data.db"
 #define INDEX_NAME "index.db"
 
@@ -24,8 +24,8 @@ int main() {
     srand(12569874);
     BF_Init(LRU);
     // Αρχικοποιήσεις
-    HT_CreateFile(FILE_NAME,10);
-    if(SHT_CreateSecondaryIndex(INDEX_NAME,10,FILE_NAME) == -1){
+    HT_CreateFile(FILE_NAME,15);
+    if(SHT_CreateSecondaryIndex(INDEX_NAME,15,FILE_NAME) == -1){
         return -1;
     }
     HT_info* info = HT_OpenFile(FILE_NAME);

@@ -22,6 +22,7 @@ typedef struct {
 typedef struct{
     char name[15];
     int blockId;
+    int numberOfAppearences;
 } SHT_Record;
 
 
